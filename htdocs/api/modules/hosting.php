@@ -1,6 +1,8 @@
 <?php
 function handle_module_request($action) {
-    $HOST_DIR = realpath(__DIR__ . '/../../hosted');
+    $dir = __DIR__ . '/../../hosted';
+    if (!is_dir($dir)) @mkdir($dir, 0777, true);
+    $HOST_DIR = realpath($dir);
 
     switch ($action) {
         case 'create':

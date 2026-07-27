@@ -1,6 +1,8 @@
 <?php
 function handle_module_request($action) {
-    $BOTS_DIR = realpath(__DIR__ . '/../../bots');
+    $dir = __DIR__ . '/../../bots';
+    if (!is_dir($dir)) @mkdir($dir, 0777, true);
+    $BOTS_DIR = realpath($dir);
 
     switch ($action) {
         case 'list_files':

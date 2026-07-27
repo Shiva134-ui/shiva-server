@@ -1,6 +1,8 @@
 <?php
 function handle_module_request($action) {
-    $BASE_DIR = realpath(__DIR__ . '/../../drive');
+    $dir = __DIR__ . '/../../drive';
+    if (!is_dir($dir)) @mkdir($dir, 0777, true);
+    $BASE_DIR = realpath($dir);
 
     switch ($action) {
         case 'list':
