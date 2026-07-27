@@ -1,0 +1,52 @@
+<!-- Path: htdocs/pages/network.html -->
+<div class="toolbar">
+    <h2>Network & System Diagnostics</h2>
+    <small>Server Health Check</small>
+</div>
+
+<div class="dashboard-grid">
+    <!-- Server Status -->
+    <div class="card">
+        <h3><i class="fas fa-server"></i> System Info</h3>
+        <ul style="list-style:none; padding:0; line-height: 2;">
+            <li><strong>Hostname:</strong> <span id="net-hostname">...</span></li>
+            <li><strong>OS:</strong> <span id="net-os">...</span></li>
+            <li><strong>Uptime:</strong> <span id="net-uptime">...</span> hrs</li>
+            <li><strong>Public IP:</strong> <span id="net-ip" class="blur-reveal">Loading...</span></li>
+        </ul>
+    </div>
+
+    <!-- Service Monitor -->
+    <div class="card">
+        <h3><i class="fas fa-network-wired"></i> Service Ports</h3>
+        <div id="service-list" style="display:flex; flex-direction:column; gap:10px;">
+            <!-- Injected by JS -->
+            <div style="color:var(--text-muted);">Scanning ports...</div>
+        </div>
+    </div>
+
+    <!-- Ping Tool -->
+    <div class="card" style="grid-column: span 2;">
+        <h3><i class="fas fa-wifi"></i> Connectivity Test</h3>
+        <div style="display:flex; gap:10px; margin-bottom:15px;">
+            <input type="text" id="ping-host" placeholder="google.com" value="google.com" style="flex:1; padding:10px; background:var(--bg-main); border:1px solid var(--border); color:var(--text-main); border-radius:6px;">
+            <button class="btn-primary" onclick="App.Network.ping()">Ping</button>
+        </div>
+        <pre id="ping-output" style="
+            background: #000; 
+            color: #0f0; 
+            padding: 15px; 
+            border-radius: 6px; 
+            min-height: 100px;
+            white-space: pre-wrap;
+        ">Waiting for input...</pre>
+    </div>
+</div>
+
+<style>
+.blur-reveal { filter: blur(5px); cursor: pointer; transition: filter 0.3s; }
+.blur-reveal:hover { filter: blur(0); }
+.status-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; margin-right: 10px; }
+.online { background: #2ecc71; box-shadow: 0 0 10px #2ecc71; }
+.offline { background: #e74c3c; }
+</style>
