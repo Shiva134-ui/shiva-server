@@ -63,7 +63,9 @@ export const setupForegroundMessaging = () => {
         data: payload.data
       };
       
-      new Notification(title, options);
+      navigator.serviceWorker.ready.then((registration) => {
+        registration.showNotification(title, options);
+      });
     });
     messageListenerInitialized = true;
   } catch (error) {
