@@ -106,7 +106,8 @@ Last updated: 2026-10-07 21:25 IST (Power Control De-Duplication & Instant Contr
 ### Milestone 8: Final Review, Cloud Hosting & Physical Hardware Handover (Tomorrow)
 - [x] **Full User Walkthrough**: Complete check of the entire web dashboard for any mistakes, visual discrepancies, or requested adjustments.
   - *Final Polish Applied*: Added glassmorphism hover glow and scale animations to dashboard StatCards. Implemented robust `400 Bad Request` validation and `500` JSON error handling on the `api/src/routes/services.js` API routes.
-- [ ] **Cloud Hosting Deployment**: Host finalized production web build to `cloud.madesh.in`.
+- [x] **Cloud Hosting Deployment**: Hosted finalized production web build to Vercel, resolved TypeScript backend serverless build conflicts by adding a `.vercelignore`, and mapped the custom domain `cloud.madesh.in` using Cloudflare DNS.
+- [x] **Progressive Web App (PWA) & Mobile Native Push**: Successfully enabled PWA installability with a custom service worker. Fixed Android Chrome foreground FCM notifications using `ServiceWorkerRegistration.showNotification()` to ensure reliable delivery across desktop and mobile.
 - [ ] **Father's House ESP32 Flashing**: When visiting Father's house, flash physical ESP32 with `esp32_code.txt`:
   - 1. Widened morning wake window: `timeinfo.tm_hour >= 8 && lastWakeDay != timeinfo.tm_mday`
   - 2. Cloudflare HTTPS 443 `Date:` header fallback in case FTTH router blocks UDP NTP port 123.
