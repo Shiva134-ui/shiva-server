@@ -33,3 +33,8 @@ if (firebaseConfig.projectId && firebaseConfig.messagingSenderId) {
     console.error('[firebase-messaging-sw.js] FCM init error:', err);
   }
 }
+
+// Dummy fetch listener to satisfy PWA installability requirements
+self.addEventListener('fetch', (event) => {
+  // Pass through all requests
+});
