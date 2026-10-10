@@ -1,0 +1,20 @@
+services:
+  madesh-api:
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+    container_name: madesh-api
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      MADESH_API_KEY: ${MADESH_API_KEY}
+      MADESH_WAKE_SECRET: ${MADESH_WAKE_SECRET}
+      HOST_ROOT: /host
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/host:ro
+    cap_add:
+      - SYS_ADMIN
+    security_opt:
+      - apparmor:unconfined

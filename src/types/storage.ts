@@ -1,0 +1,1 @@
+export interface DiskInfo { device: string; mountpoint: string; type: string; total: number; used: number; free: number; usagePercent: number; }

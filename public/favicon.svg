@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <rect width="512" height="512" rx="112" fill="#0A0A0A"/>
+  <rect width="500" height="500" x="6" y="6" rx="106" fill="#0F0F0F" stroke="#2A2A2A" stroke-width="12"/>
+  <!-- Sleek Obsidian White 'M' Monogram -->
+  <path d="M128 384V128h54l74 144 74-144h54v256h-44V202l-68 134h-32l-68-134v182h-44z" fill="#FFFFFF"/>
+</svg>

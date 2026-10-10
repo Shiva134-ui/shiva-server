@@ -1,0 +1,19 @@
+{
+  "name": "wake-relay",
+  "version": "1.0.0",
+  "description": "Cloudflare Worker Wake Relay",
+  "main": "src/index.ts",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy"
+  },
+  "dependencies": {
+    "jose": "^5.2.3"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20240320.1",
+    "typescript": "^5.0.4",
+    "wrangler": "^3.38.0"
+  },
+  "private": true
+}

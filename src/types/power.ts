@@ -1,0 +1,1 @@
+export interface PowerStatus { serverPower: 'on' | 'off'; upsBatteryPercent: number; upsStatus: 'charging' | 'discharging' | 'full'; esp32Connected: boolean; }

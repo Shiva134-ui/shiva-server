@@ -1,0 +1,20 @@
+[Unit]
+Description=MΛDESH Server API
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=madesh
+Group=madesh
+WorkingDirectory=/opt/madesh-server/api
+EnvironmentFile=/etc/madesh-api/api.env
+ExecStart=/usr/bin/node src/server.js
+Restart=on-failure
+RestartSec=5
+StandardOutput=syslog
+StandardError=syslog
+SyslogIdentifier=madesh-api
+
+[Install]
+WantedBy=multi-user.target

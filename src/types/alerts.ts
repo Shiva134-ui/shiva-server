@@ -1,0 +1,1 @@
+export interface SystemAlert { id: string; type: 'info' | 'warning' | 'error' | 'critical'; title: string; message: string; timestamp: string; read: boolean; }

@@ -1,0 +1,9 @@
+{
+  "enabled": true,
+  "scheduleDay": 0,
+  "scheduleTime": "10:00",
+  "retentionCount": 4,
+  "lastBackupDate": null,
+  "lastBackupStatus": "none",
+  "lastBackupFile": null
+}

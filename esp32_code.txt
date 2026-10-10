@@ -1,0 +1,415 @@
+/*
+ * =========================================================================================
+ * MΛDESH SERVER - ESP32 WAKE-ON-LAN & POWER AUTOMATION CONTROLLER
+ * =========================================================================================
+ * Location: Father's House (Local LAN: 192.168.1.x)
+ * Target Server MAC: 00:E0:22:DA:B1:67
+ * Target Server IP : 192.168.1.36
+ *
+ * Core Capabilities:
+ *  1. Autonomous Power Restoration Recovery (8 AM – 12 AM IST):
+ *     - Controlled remotely via Web Dashboard / Android App ("Auto-Resume on Outage").
+ *     - Setting is persistently cached in ESP32 internal Flash memory (Preferences/NVS).
+ *     - When house power cuts & returns, ESP32 boots up with the extension box.
+ *     - If Enabled & between 8 AM and 12 AM: Stabilizes for 25s, then sends up to 3 WOL bursts
+ *       with instant TCP handshake ACK verification on 192.168.1.36:22.
+ *     - If Disabled or between 12 AM and 8 AM: Server safely remains OFF.
+ *  2. Scheduled Morning Wakeup: Autonomous 08:00 AM IST daily wake.
+ *  3. Cloudflare Remote Wake Gateway: Polls https://wake.madesh.in/poll every 8s.
+ *  4. Periodic Dashboard Sync: Automatically syncs power policy changes every 60s.
+ *  5. Wi-Fi Auto-Reconnection & Heartbeat.
+ * =========================================================================================
+ */
+
+#include <WiFi.h>
+#include <WiFiUdp.h>
+#include <HTTPClient.h>
+#include <WiFiClientSecure.h>
+#include <Preferences.h>
+#include "time.h"
+
+// =========================================================================================
+// Wi-Fi Configuration
+// =========================================================================================
+const char* WIFI_SSID     = "FTTH";
+const char* WIFI_PASSWORD = "shiva_00.2";
+
+// =========================================================================================
+// Target Server Configuration
+// =========================================================================================
+const char* SERVER_MAC        = "00:E0:22:DA:B1:67";
+const char* SERVER_IP         = "192.168.1.36";
+const int   SERVER_TCP_PORT   = 22; // SSH TCP port for instant ACK
+const int   WOL_PORT          = 9;
+
+// =========================================================================================
+// Outage Recovery Parameters (8:00 AM – 12:00 AM Operational Window)
+// =========================================================================================
+const bool  DEFAULT_AUTO_RESUME_ON_OUTAGE = false; // Default state is DISABLED (Safe)
+const int   OUTAGE_WINDOW_START_HOUR      = 8;    // 08:00 AM IST
+const int   OUTAGE_WINDOW_END_HOUR        = 24;   // 12:00 AM (Midnight) IST
+const int   OUTAGE_COUNTDOWN_SEC          = 25;   // Line voltage & router stabilization countdown
+const int   MAX_WOL_RETRIES               = 3;    // Maximum retry attempts
+const int   WOL_RETRY_INTERVAL_SEC        = 35;   // Wait up to 35 seconds per attempt for server to boot
+const unsigned long SYNC_CONFIG_INTERVAL_MS = 60000; // Sync settings with dashboard every 60 seconds
+
+// =========================================================================================
+// Remote Gateways & Cloud Endpoints
+// =========================================================================================
+const char* WAKE_URL        = "https://wake.madesh.in/poll";
+const char* SERVER_API_BASE = "https://api.madesh.in/api/v1/power";
+const char* ESP32_TOKEN     = "399d1a8c07f84460a525470ad5301bc6bfe4dee87763415281748efd7dae18f1";
+
+// =========================================================================================
+// NTP Time Configuration (Asia/Kolkata / IST = UTC + 5:30)
+// =========================================================================================
+const char* NTP_SERVER1     = "pool.ntp.org";
+const char* NTP_SERVER2     = "time.google.com";
+const long  GMT_OFFSET_SEC  = 19800; // 5 hours 30 mins * 3600
+const int   DAYLIGHT_OFFSET = 0;
+
+// =========================================================================================
+// Global State
+// =========================================================================================
+WiFiUDP udp;
+Preferences preferences;
+int lastWakeDay = -1;
+unsigned long lastPollTime = 0;
+unsigned long lastSyncTime = 0;
+const unsigned long POLL_INTERVAL_MS = 8000; // Poll every 8 seconds
+
+// =========================================================================================
+// Helper: Send Magic Packet (Wake-on-LAN)
+// =========================================================================================
+void sendWOL(const char* reason = "Manual/Remote") {
+  byte mac[6];
+  if (sscanf(SERVER_MAC, "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx",
+             &mac[0], &mac[1], &mac[2], &mac[3], &mac[4], &mac[5]) != 6) {
+    Serial.println("[WOL Error] Invalid MAC address format!");
+    return;
+  }
+
+  byte packet[102];
+  // 6 bytes of 0xFF
+  for (int i = 0; i < 6; i++) {
+    packet[i] = 0xFF;
+  }
+  // 16 repetitions of MAC
+  for (int i = 0; i < 16; i++) {
+    memcpy(&packet[6 + i * 6], mac, 6);
+  }
+
+  // Send a burst of 3 packets for 100% switch reliability
+  for (int r = 0; r < 3; r++) {
+    udp.beginPacket("255.255.255.255", WOL_PORT);
+    udp.write(packet, sizeof(packet));
+    udp.endPacket();
+    delay(100);
+  }
+
+  Serial.printf("[WOL] Magic packet burst successfully sent to %s (%s)\n", SERVER_MAC, reason);
+}
+
+// =========================================================================================
+// Helper: Check if Server is Online via Local TCP Handshake (SSH port 22)
+// =========================================================================================
+bool isServerOnline() {
+  WiFiClient client;
+  client.setTimeout(1200); // 1.2s timeout
+  if (client.connect(SERVER_IP, SERVER_TCP_PORT)) {
+    client.stop();
+    return true;
+  }
+  return false;
+}
+
+// =========================================================================================
+// Helper: Report Power Event to Server API (Triggers FCM Push Notifications)
+// =========================================================================================
+void reportServerEvent(const char* eventType, const char* message) {
+  if (WiFi.status() != WL_CONNECTED) return;
+
+  WiFiClientSecure client;
+  client.setInsecure();
+  HTTPClient https;
+
+  String endpoint = String(SERVER_API_BASE) + "/event";
+  if (https.begin(client, endpoint)) {
+    https.addHeader("Content-Type", "application/json");
+    https.addHeader("X-ESP32-Token", ESP32_TOKEN);
+    https.setTimeout(5000);
+
+    String payload = "{\"event\":\"" + String(eventType) + "\",\"message\":\"" + String(message) + "\"}";
+    int code = https.POST(payload);
+    Serial.printf("[Event Engine] Dispatched '%s' -> HTTP %d\n", eventType, code);
+    https.end();
+  }
+}
+
+// =========================================================================================
+// Helper: Synchronize NTP Time
+// =========================================================================================
+bool syncNTP() {
+  Serial.println("[NTP] Synchronizing time with pool.ntp.org (IST UTC+5:30)...");
+  configTime(GMT_OFFSET_SEC, DAYLIGHT_OFFSET, NTP_SERVER1, NTP_SERVER2);
+
+  struct tm timeinfo;
+  int retry = 0;
+  while (!getLocalTime(&timeinfo) && retry < 15) {
+    delay(500);
+    Serial.print(".");
+    retry++;
+  }
+
+  if (retry < 15) {
+    Serial.println("\n[NTP] Time synchronized successfully!");
+    char buf[64];
+    strftime(buf, sizeof(buf), "%A, %d %B %Y - %H:%M:%S IST", &timeinfo);
+    Serial.printf("[NTP] Current IST Time: %s\n", buf);
+    return true;
+  } else {
+    Serial.println("\n[NTP Warning] NTP synchronization timed out. Will retry in loop.");
+    return false;
+  }
+}
+
+// =========================================================================================
+// Helper: Sync Power Configuration with Dashboard & Save to Flash Memory
+// =========================================================================================
+void syncDashboardConfig() {
+  if (WiFi.status() != WL_CONNECTED) return;
+
+  WiFiClientSecure client;
+  client.setInsecure();
+  HTTPClient https;
+
+  String endpoint = String(SERVER_API_BASE) + "/config";
+  if (https.begin(client, endpoint)) {
+    https.addHeader("X-ESP32-Token", ESP32_TOKEN);
+    https.setTimeout(4000);
+
+    int httpCode = https.GET();
+    if (httpCode == 200) {
+      String payload = https.getString();
+      bool autoResume = (payload.indexOf("\"autoResumeOnOutage\":true") >= 0);
+
+      preferences.begin("madesh_pwr", false);
+      bool currentSaved = preferences.getBool("autoResume", DEFAULT_AUTO_RESUME_ON_OUTAGE);
+      if (currentSaved != autoResume) {
+        preferences.putBool("autoResume", autoResume);
+        Serial.printf("\n[Dashboard Sync] >>> Auto-Resume on Outage setting updated in Flash: %s <<<\n\n",
+                      autoResume ? "ENABLED (8 AM - 12 AM)" : "DISABLED");
+      }
+      preferences.end();
+    }
+    https.end();
+  }
+}
+
+// =========================================================================================
+// Autonomous Power Restoration Recovery (Zero-API Local Handshake)
+// =========================================================================================
+void handlePowerRestorationRecovery() {
+  Serial.println("\n-------------------------------------------------------------");
+  Serial.println("[Power Recovery] Checking if server needs auto-wake...");
+  Serial.println("-------------------------------------------------------------");
+
+  // 1. Check if server is already online (e.g. if power was never cut or server booted fast)
+  if (isServerOnline()) {
+    Serial.printf("[Power Recovery] Server (%s:%d) is ALREADY online and acknowledging!\n", SERVER_IP, SERVER_TCP_PORT);
+    Serial.println("[Power Recovery] No wake packets required.");
+    reportServerEvent("power_restored", "Power restored in father's house. Server is already online.");
+    return;
+  }
+
+  // 2. Read Auto-Resume setting from ESP32 internal Flash memory (Preferences)
+  preferences.begin("madesh_pwr", true);
+  bool autoResumeEnabled = preferences.getBool("autoResume", DEFAULT_AUTO_RESUME_ON_OUTAGE);
+  preferences.end();
+
+  Serial.printf("[Power Recovery] Policy setting in Flash: Auto-Resume is %s\n",
+                autoResumeEnabled ? "ENABLED" : "DISABLED");
+
+  if (!autoResumeEnabled) {
+    Serial.println("[Power Recovery] Auto-resume on outage is currently DISABLED in dashboard settings.");
+    Serial.println("[Power Recovery] Leaving server OFF.");
+    return;
+  }
+
+  // 3. Check time window: Operational hours are 8:00 AM to 12:00 AM (midnight) IST
+  struct tm timeinfo;
+  if (getLocalTime(&timeinfo)) {
+    int hour = timeinfo.tm_hour;
+    if (hour < OUTAGE_WINDOW_START_HOUR || hour >= OUTAGE_WINDOW_END_HOUR) {
+      Serial.printf("[Power Recovery] Current time is %02d:%02d IST (Night Window 12 AM - 8 AM).\n", hour, timeinfo.tm_min);
+      Serial.println("[Power Recovery] Night schedule active. Leaving server OFF until 08:00 AM morning wake.");
+      return;
+    }
+  }
+
+  // 4. Line voltage & router stabilization countdown
+  Serial.printf("[Power Recovery] Auto-Resume is ACTIVE for 8 AM - 12 AM operational window!\n");
+  Serial.printf("[Power Recovery] Waiting %d seconds for router & voltage stabilization...\n", OUTAGE_COUNTDOWN_SEC);
+  for (int s = OUTAGE_COUNTDOWN_SEC; s > 0; s--) {
+    Serial.printf("[Countdown] %d seconds remaining before sending WOL...\n", s);
+    delay(1000);
+  }
+
+  // 5. Send up to MAX_WOL_RETRIES with ACK verification
+  bool ackReceived = false;
+  for (int attempt = 1; attempt <= MAX_WOL_RETRIES; attempt++) {
+    Serial.printf("\n[Power Recovery] Attempt %d of %d: Sending Wake-on-LAN magic packet...\n", attempt, MAX_WOL_RETRIES);
+    sendWOL("Power Restoration Auto-Resume");
+
+    Serial.printf("[Power Recovery] Awaiting ACK from server (%s:%d)...\n", SERVER_IP, SERVER_TCP_PORT);
+    // Poll TCP port 22 every 3 seconds for WOL_RETRY_INTERVAL_SEC
+    int checks = WOL_RETRY_INTERVAL_SEC / 3;
+    for (int c = 0; c < checks; c++) {
+      delay(3000);
+      if (isServerOnline()) {
+        ackReceived = true;
+        Serial.printf("\n[Power Recovery] >>> SERVER ACK RECEIVED (Boot confirmed in ~%d sec)! <<<\n", (c + 1) * 3);
+        break;
+      }
+      Serial.print(".");
+    }
+    Serial.println();
+
+    if (ackReceived) {
+      reportServerEvent("server_online", "Server successfully woke and acknowledged TCP port 22 after power restoration.");
+      break;
+    } else {
+      Serial.printf("[Power Recovery] No ACK received on attempt %d.\n", attempt);
+    }
+  }
+
+  if (!ackReceived) {
+    Serial.println("[Power Recovery Warning] Server did not acknowledge after maximum attempts. Check motherboard power / LAN cable.");
+  }
+}
+
+// =========================================================================================
+// Cloudflare Remote Wake Polling
+// =========================================================================================
+void pollCloudflareGateway() {
+  if (WiFi.status() != WL_CONNECTED) return;
+
+  WiFiClientSecure client;
+  client.setInsecure();
+  HTTPClient https;
+
+  if (!https.begin(client, WAKE_URL)) return;
+  https.addHeader("X-ESP32-Token", ESP32_TOKEN);
+  https.setTimeout(4000);
+
+  int httpCode = https.GET();
+  if (httpCode == 200) {
+    String resp = https.getString();
+    if (resp.indexOf("\"wake\":true") >= 0) {
+      Serial.println("\n[GATEWAY] >>> WAKE REQUEST RECEIVED FROM REMOTE DASHBOARD / ANDROID APP! <<<");
+      sendWOL("Remote Cloudflare Request");
+      reportServerEvent("wake_sent", "Remote wake request triggered from dashboard / Android app.");
+    }
+  }
+  https.end();
+}
+
+// =========================================================================================
+// Setup
+// =========================================================================================
+void setup() {
+  Serial.begin(115200);
+  delay(1000);
+
+  Serial.println();
+  Serial.println("=============================================================");
+  Serial.println("   MΛDESH SERVER - ESP32 WOL & POWER AUTOMATION CONTROLLER    ");
+  Serial.println("=============================================================");
+  Serial.printf("Target Server MAC : %s\n", SERVER_MAC);
+  Serial.printf("Target Server IP  : %s (Port %d)\n", SERVER_IP, SERVER_TCP_PORT);
+  Serial.printf("Connecting to SSID: %s\n", WIFI_SSID);
+
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+
+  int wifiAttempts = 0;
+  while (WiFi.status() != WL_CONNECTED && wifiAttempts < 40) {
+    delay(500);
+    Serial.print(".");
+    wifiAttempts++;
+  }
+
+  if (WiFi.status() == WL_CONNECTED) {
+    Serial.println("\n[Wi-Fi] Connected successfully!");
+    Serial.printf("[Wi-Fi] ESP32 IP Address: %s\n", WiFi.localIP().toString().c_str());
+    Serial.printf("[Wi-Fi] Gateway IP      : %s\n", WiFi.gatewayIP().toString().c_str());
+
+    udp.begin(WOL_PORT);
+
+    // 1. Sync clock with IST time
+    syncNTP();
+
+    // 2. Report power restoration / ESP32 boot event to Server API
+    reportServerEvent("esp32_boot", "ESP32 WOL relay has booted and reconnected to FTTH Wi-Fi.");
+
+    // 3. Autonomous Power Restoration Recovery (Zero-API Local Handshake)
+    handlePowerRestorationRecovery();
+  } else {
+    Serial.println("\n[Wi-Fi Error] Failed to connect to Wi-Fi. Will auto-retry in loop.");
+  }
+
+  Serial.println("=============================================================");
+  Serial.println("System operational. Autonomous 8:00 AM wake & polling active.");
+  Serial.println("=============================================================\n");
+}
+
+// =========================================================================================
+// Main Loop
+// =========================================================================================
+void loop() {
+  // 1. Wi-Fi Auto-reconnect watchdog
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println("[Watchdog] Wi-Fi lost. Attempting reconnection...");
+    WiFi.disconnect();
+    WiFi.reconnect();
+    delay(3000);
+    return;
+  }
+
+  // 2. Clock & Autonomous 08:00 AM Morning Wakeup
+  struct tm timeinfo;
+  if (getLocalTime(&timeinfo)) {
+    // 08:00 AM IST exact check
+    if (timeinfo.tm_hour == 8 && timeinfo.tm_min == 0) {
+      if (lastWakeDay != timeinfo.tm_mday) {
+        lastWakeDay = timeinfo.tm_mday;
+        Serial.println("\n*************************************************************");
+        Serial.println("[SCHEDULE] 08:00 AM IST REACHED -> FIRING AUTONOMOUS WAKE!");
+        Serial.println("*************************************************************");
+        sendWOL("Scheduled 08:00 AM IST Auto-Wake");
+        reportServerEvent("wake_sent", "Automated 08:00 AM IST scheduled wake executed.");
+      }
+    }
+  } else {
+    // If clock ever desyncs, try syncing again
+    static unsigned long lastNtpRetry = 0;
+    if (millis() - lastNtpRetry > 60000) {
+      lastNtpRetry = millis();
+      syncNTP();
+    }
+  }
+
+  // 3. Poll Cloudflare Gateway for Remote Wake Commands (every 8s)
+  if (millis() - lastPollTime >= POLL_INTERVAL_MS) {
+    lastPollTime = millis();
+    pollCloudflareGateway();
+  }
+
+  // 4. Periodic Sync with Dashboard Power Config (every 60s)
+  if (millis() - lastSyncTime >= SYNC_CONFIG_INTERVAL_MS) {
+    lastSyncTime = millis();
+    syncDashboardConfig();
+  }
+
+  delay(100);
+}

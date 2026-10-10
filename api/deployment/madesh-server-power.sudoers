@@ -1,0 +1,4 @@
+madesh ALL=(root) NOPASSWD: /usr/local/sbin/madesh-server-power
+madesh ALL=(root) NOPASSWD: /usr/local/sbin/madesh-server-restart
+madesh ALL=(root) NOPASSWD: /usr/local/sbin/madesh-server-shutdown
+madesh ALL=(root) NOPASSWD: /usr/local/sbin/madesh-service-control

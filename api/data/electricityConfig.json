@@ -1,0 +1,7 @@
+{
+  "calculationMode": "estimated",
+  "estimatedWattage": 50,
+  "tariff": 8,
+  "fixedMonthlyCharge": 0,
+  "timezone": "Asia/Kolkata"
+}
