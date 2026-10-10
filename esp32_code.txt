@@ -181,7 +181,9 @@ bool syncNTP() {
         if (dateStr.length() > 0) {
           struct tm tm;
           if (strptime(dateStr.c_str(), "%a, %d %b %Y %H:%M:%S", &tm) != NULL) {
-            time_t t = mktime(&tm);
+            // mktime assumes local time, so we must add the GMT offset back 
+            // because the Date header is strictly GMT time.
+            time_t t = mktime(&tm) + GMT_OFFSET_SEC;
             struct timeval tv = { .tv_sec = t, .tv_usec = 0 };
             settimeofday(&tv, NULL);
             Serial.println("\n[NTP Fallback] Time successfully synced via HTTPS Date header!");
