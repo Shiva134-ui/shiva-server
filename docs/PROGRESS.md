@@ -108,6 +108,6 @@ Last updated: 2026-10-07 21:25 IST (Power Control De-Duplication & Instant Contr
   - *Final Polish Applied*: Added glassmorphism hover glow and scale animations to dashboard StatCards. Implemented robust `400 Bad Request` validation and `500` JSON error handling on the `api/src/routes/services.js` API routes.
 - [x] **Cloud Hosting Deployment**: Hosted finalized production web build to Vercel, resolved TypeScript backend serverless build conflicts by adding a `.vercelignore`, and mapped the custom domain `cloud.madesh.in` using Cloudflare DNS.
 - [x] **Progressive Web App (PWA) & Mobile Native Push**: Successfully enabled PWA installability with a custom service worker. Fixed Android Chrome foreground FCM notifications using `ServiceWorkerRegistration.showNotification()` to ensure reliable delivery across desktop and mobile.
-- [ ] **Father's House ESP32 Flashing**: When visiting Father's house, flash physical ESP32 with `esp32_code.txt`:
-  - 1. Widened morning wake window: `timeinfo.tm_hour >= 8 && lastWakeDay != timeinfo.tm_mday`
-  - 2. Cloudflare HTTPS 443 `Date:` header fallback in case FTTH router blocks UDP NTP port 123.
+- [ ] **Father's House ESP32 Flashing**: When visiting Father's house, flash physical ESP32 with the finalized, production-ready `esp32_code.txt`:
+  - 1. Widened morning wake window: `timeinfo.tm_hour >= 8 && timeinfo.tm_hour < OUTAGE_WINDOW_END_HOUR`
+  - 2. Cloudflare HTTPS 443 `Date:` header fallback in case FTTH router blocks UDP NTP port 123 (with strictly corrected GMT offset parsing via `mktime`).

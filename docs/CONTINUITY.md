@@ -36,7 +36,7 @@ Last updated: 2026-10-07 23:55 IST (Complete End-to-End Audit & Polish Complete 
 6. **Handover for Tomorrow**:
    - **Step 1 (COMPLETED)**: User walkthrough of the web application. Final UI/UX polish (glassmorphism StatCard hovers) and API validation (services control) applied.
    - **Step 2 (COMPLETED)**: Deployed the finalized production dashboard to Vercel, mapped the custom domain `cloud.madesh.in` via Cloudflare, and successfully transformed the dashboard into an installable **Progressive Web App (PWA)** with flawless Android and Desktop native push notifications via FCM service workers.
-   - **Step 3 (PENDING)**: When the user goes to Father's house, flash the ESP32 using `esp32_code.txt` (widened morning wake window `tm_hour >= 8 && lastWakeDay != tm_mday` and HTTPS 443 `Date:` header fallback). The complete dashboard web and hardware integration will be 100% complete!
+   - **Step 3 (PENDING)**: When the user goes to Father's house, flash the ESP32 using the finalized, line-by-line verified `esp32_code.txt` (which contains the widened `>= 8` AM wake window, HTTPS 443 `Date:` header fallback, and corrected timezone offsets). The complete dashboard web and hardware integration will be 100% complete!
 
 ---
 
