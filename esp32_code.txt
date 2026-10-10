@@ -168,7 +168,30 @@ bool syncNTP() {
     Serial.printf("[NTP] Current IST Time: %s\n", buf);
     return true;
   } else {
-    Serial.println("\n[NTP Warning] NTP synchronization timed out. Will retry in loop.");
+    Serial.println("\n[NTP Warning] UDP Port 123 NTP timed out. Attempting HTTPS 443 Date: fallback...");
+    WiFiClientSecure client;
+    client.setInsecure();
+    HTTPClient https;
+    if (https.begin(client, "https://google.com")) {
+      const char * headerKeys[] = {"Date"};
+      https.collectHeaders(headerKeys, 1);
+      int httpCode = https.sendRequest("HEAD");
+      if (httpCode > 0) {
+        String dateStr = https.header("Date");
+        if (dateStr.length() > 0) {
+          struct tm tm;
+          if (strptime(dateStr.c_str(), "%a, %d %b %Y %H:%M:%S", &tm) != NULL) {
+            time_t t = mktime(&tm);
+            struct timeval tv = { .tv_sec = t, .tv_usec = 0 };
+            settimeofday(&tv, NULL);
+            Serial.println("\n[NTP Fallback] Time successfully synced via HTTPS Date header!");
+            return true;
+          }
+        }
+      }
+      https.end();
+    }
+    Serial.println("\n[NTP Error] Both UDP NTP and HTTPS Fallback failed. Will retry in loop.");
     return false;
   }
 }
@@ -379,8 +402,8 @@ void loop() {
   // 2. Clock & Autonomous 08:00 AM Morning Wakeup
   struct tm timeinfo;
   if (getLocalTime(&timeinfo)) {
-    // 08:00 AM IST exact check
-    if (timeinfo.tm_hour == 8 && timeinfo.tm_min == 0) {
+    // 08:00 AM IST widened wake window check
+    if (timeinfo.tm_hour >= 8 && timeinfo.tm_hour < OUTAGE_WINDOW_END_HOUR) {
       if (lastWakeDay != timeinfo.tm_mday) {
         lastWakeDay = timeinfo.tm_mday;
         Serial.println("\n*************************************************************");
