@@ -14,10 +14,18 @@
  *     - If Enabled & between 8 AM and 12 AM: Stabilizes for 25s, then sends up to 3 WOL bursts
  *       with instant TCP handshake ACK verification on 192.168.1.36:22.
  *     - If Disabled or between 12 AM and 8 AM: Server safely remains OFF.
- *  2. Scheduled Morning Wakeup: Autonomous 08:00 AM IST daily wake.
+ *  2. Scheduled Morning Wakeup:
+ *     - Time fully controllable from Dashboard (Power Management -> Automatic Start).
+ *     - ESP32 syncs wake time (startTime) from API every 60s and persists to NVS Flash.
+ *     - 30-minute catch-up window ensures wake fires even if ESP32 rebooted mid-window.
+ *     - Pre-checks if server is already online before sending WOL (no redundant packets).
+ *     - Toggle (dailyStartEnabled) also synced from dashboard.
  *  3. Cloudflare Remote Wake Gateway: Polls https://wake.madesh.in/poll every 8s.
- *  4. Periodic Dashboard Sync: Automatically syncs power policy changes every 60s.
- *  5. Wi-Fi Auto-Reconnection & Heartbeat.
+ *  4. Periodic Dashboard Sync: Syncs autoResume, dailyWake, startTime every 60s.
+ *  5. Wi-Fi Auto-Reconnection & Heartbeat watchdog.
+ *  6. NTP Time Sync (UDP port 123) with HTTPS Date: header fallback (port 443).
+ *  7. HTTP 530 (Cloudflare Tunnel offline) handled gracefully — expected during server boot.
+ *  8. All critical settings persist in NVS Flash — survives power cuts & reboots.
  * =========================================================================================
  */
 
