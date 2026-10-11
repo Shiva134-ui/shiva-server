@@ -1,10 +1,16 @@
 # Main Web Decisions & Guardrails
 
+Last Updated: 2026-10-11 18:30 IST
+
 | Decision | Reason |
 |---|---|
-| Keep local Main Web frontend; send requests to `http://100.79.42.30:3001` (or `https://api.madesh.in`). | The frontend is not hosted at `cloud.madesh.in`; Ubuntu must be the source of system data. |
+| Keep local Main Web frontend; send requests to `http://100.79.42.30:3001` (or `https://api.madesh.in`). | The frontend is not hosted on the physical server; Ubuntu must be the source of system data. |
 | Use Vite `/api` proxy in development targeting the direct Tailscale IP (`http://100.79.42.30:3001`). | Keeps browser requests same-origin and bypasses Cloudflare WAF which blocks `/storage/files` requests as directory traversal attacks. |
-| Autonomous NTP on ESP32 in IST (+5:30) for 08:00 AM wake. | Decouples morning wake from the server (which is powered off). Layer 2 UDP broadcast WOL (`255.255.255.255:9`) can only originate on the local LAN. |
+| Dynamic 24h `startTime` sync from Dashboard to ESP32 Flash (`Preferences.h`). | Allows the user to change the morning wake time from the Web Dashboard without needing to re-flash the ESP32. Synced every 60s. |
+| 30-Minute Morning Wake Catch-up Window. | If ESP32 boots at 08:05 AM due to a power blink, it still sends the wake packet instead of missing the entire day's scheduled boot. |
+| Single-wake-per-day enforcement via `lastWakeDay`. | Prevents redundant magic packets from firing on afternoon or evening ESP32 reboots. |
+| Dual Clock Sync: UDP NTP with HTTPS 443 `Date:` header fallback. | FTTH routers or ISPs often block UDP port 123. The HTTPS fallback over standard port 443 guarantees accurate time synchronization. |
+| Autonomous NTP on ESP32 in IST (+5:30) for scheduled wake. | Decouples morning wake from the server (which is powered off). Layer 2 UDP broadcast WOL (`255.255.255.255:9`) can only originate on the local LAN. |
 | `intentional_off` flag persisted in `powerConfig.json`. | Prevents unwanted auto-restart after power blinks if the user intentionally shut down the server or the 12:00 AM scheduled shutdown ran. |
 | `autoResumeOnOutage` defaulted to `false`. | Prevents server from auto-booting unexpectedly after a power cut between 8 AM and 12 AM unless explicitly toggled on by user in the dashboard. |
 | Sunday 10:00 AM automated backup via `backupScheduler.js`. | Dedicated background service decoupled from systemd timers, manageable from the UI, with direct FCM push notifications. |

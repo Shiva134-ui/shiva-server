@@ -1,151 +1,114 @@
 # Main Web Continuity & Session Handover
 
-Last updated: 2026-10-07 23:55 IST (Complete End-to-End Audit & Polish Complete | Ready for Tomorrow's Full Review & Cloud Hosting)
+Last updated: 2026-10-11 18:30 IST (Production-Ready v1.0 Finalized | Father's House Handover Complete)
 
 ---
 
-## 🚀 STATUS SUMMARY & COMPLETED WORK (TODAY'S SESSION)
-
-1. **Hardware & Thermal Telemetry Overhaul (100% Accurate Linux Kernel Telemetry)**:
-   - **Linux Kernel `hwmon` Engine**: Rewrote `api/src/services/cpuService.js` to inspect `/sys/class/hwmon/hwmon*` directly (`coretemp` on Intel Ivy Bridge i3-3220, `k10temp` on AMD), parsing `temp*_input`, `temp*_label`, `temp*_crit`, and scanning multi-zone `/sys/class/thermal/` for `x86_pkg_temp`. Eliminated all static dummy fallbacks (`38°C`, `37°C`, `39°C`).
-   - **Frontend Object Parsing Bug**: In `src/services/system.ts`, `thermal.coreTemps` returned an array of objects (`[{ name: 'Core 0', temp: 42 }]`), but `Number(temp)` evaluated to `NaN` and forced an artificial fallback to `packageTemp ± 1`. Fixed to unpack object and numeric shapes cleanly.
-   - **Dynamic Storage Disks & SMART Decoding**: Rewrote `api/src/services/smartHealthService.js` and `api/src/services/storageService.js` to dynamically discover all block devices via `/sys/block` and `lsblk` (no longer hardcoded to `['/dev/sda', '/dev/sdb']`).
-   - **`smartctl` Bitmask Exit Code Fix**: Added `ignoreExitCode: true` in `api/src/utils/command.js` so non-zero bitmask exit codes (e.g. 4 or 64 for historical log entries on healthy drives) do not reject promises or drop valid JSON stdout.
-   - **ATA Attribute Decoding**: Added `extractSmartTemperature` to parse ATA Attribute Table **194** (`Temperature_Celsius`), **190** (`Airflow_Temperature_Cel`), **231**, NVMe health logs, and kernel `drivetemp` `/sys/class/hwmon`.
-   - **Thermal Guard & UI Defaults**: Fixed `api/src/services/thermalGuardService.js`, `ThermalGuardCard.tsx`, and `SystemTemperatures.tsx` so uninitialized states render loading dashes/meters rather than misleading `65°C` or `38°C` fallbacks.
-
-2. **Logs Tab UI Complete Claude Obsidian Redesign**:
-   - Removed fake macOS traffic-light window dots (`#FF5F56`, `#FFBD2E`, `#27C93F`) across `LogsSystem.tsx`, `LogsDocker.tsx`, and `LogsAudit.tsx`.
-   - Modernized `LogsNavHeader.tsx` with Claude Obsidian typography, active tab pill styling (`bg-white text-[#0A0A0A] font-semibold`), and quiet `.claude-btn-secondary` actions.
-   - Cleaned up stream rows: muted timestamps (`#666666`), subtle inline tags (`ERR` in `#F87171`, `WARN` in `#FBBF24`), process badges in `#A3A3A3 bg-[#1A1A1A] border-[#2A2A2A]`, and soft amber search highlighting.
-
-3. **Administration, Services & SSH Sessions End-to-End**:
-   - **Active SSH Sessions**: Replaced fragile `who`/`w` parsing with direct Linux kernel socket stats (`ss -nt state established sport = :22`) and process inspection (`ps sshd-session`), accurately displaying connected client IPs, ports, usernames, and session duration.
-   - **Schedules / Cron**: End-to-end verified cron job listing, toggling, creation, and crontab persistence.
-   - **APT Updates**: Live APT cache reading (upgradable packages, security updates, reboot required check) and upgrade execution.
-   - **Settings Tab**: All 5 sub-tabs (General, Telemetry, Power & Outage, Thermal Guard, Security/Credentials) verified end-to-end. Target server MAC verified as `00:E0:22:DA:B1:67`.
-   - **App Portal & Services**: End-to-end service inventory, container controls, and health probes.
-
-4. **Branding & Notification Modal Aesthetics**:
-   - Unified logo branding: Sleek solid black square background with crisp white monogram `'M'` (Claude aesthetic).
-   - Polished notification drawer and popups: Claude Obsidian spacing, `Source Serif 4` / `JetBrains Mono` typography, and harmonious badges.
-
-5. **Command Palette (`Ctrl + K`)**:
-   - Full keyboard navigation (`↑`/`↓`/`Enter`), Claude dark obsidian background (`#222222`), fixed white-on-white text bug, and indexed 27 dashboard routes.
-
-6. **Handover for Tomorrow**:
-   - **Step 1 (COMPLETED)**: User walkthrough of the web application. Final UI/UX polish (glassmorphism StatCard hovers) and API validation (services control) applied.
-   - **Step 2 (COMPLETED)**: Deployed the finalized production dashboard to Vercel, mapped the custom domain `cloud.madesh.in` via Cloudflare, and successfully transformed the dashboard into an installable **Progressive Web App (PWA)** with flawless Android and Desktop native push notifications via FCM service workers.
-   - **Step 3 (PENDING)**: When the user goes to Father's house, flash the ESP32 using the finalized, line-by-line verified `esp32_code.txt` (which contains the widened `>= 8` AM wake window, HTTPS 443 `Date:` header fallback, and corrected timezone offsets). The complete dashboard web and hardware integration will be 100% complete!
-
----
-
-## 🎯 WEB DASHBOARD AUDIT & REFINEMENT PROGRESS (30/30 COMPLETE)
-
-| Page / Route | Status | Notes & Fixes |
-| :--- | :--- | :--- |
-| `/dashboard` | ❄️ **FROZEN & LOCKED** | Complete responsive perfection across Mobile (390px), Tablet (768px), and Desktop (1440px). Quick Actions grid, Thermal Guard theme unification, Today's usage & bill stats, true JetBrains Mono bold glyphs, clean offline fallbacks. DO NOT TOUCH. |
-| `/system-overview` | ✅ Verified | Hostname, OS, kernel, uptime, network interfaces, 4-thread CPU visualizer |
-| `/system-processes` | ✅ Verified | Process table, sorting, killing/signals, responsive slide-in details drawer |
-| `/system-hardware` | ✅ Verified | CPU, RAM, sensors, disks, maintenance targets |
-| `/system-temperatures`| ✅ Verified | Real kernel `hwmon` & ATA SMART 194/190 sensors, multi-core Ivy Bridge temps, trip limits |
-| `/system-services` | ✅ Verified | Auto-Start Manager: systemd daemons, Docker containers, scheduled timers with 1-click toggles |
-| `/docker-containers` | ✅ Verified | Container states, logs, controls, responsive layout |
-| `/docker-images` | ✅ Verified | Image registry, tags, sizes |
-| `/docker-volumes` | ✅ Verified | Volumes list and inspection |
-| `/docker-networks` | ✅ Verified | Bridge, host, overlay networks |
-| `/monitoring-metrics`| ✅ Verified | Metric graphs and real-time gauges |
-| `/monitoring-grafana`| ✅ Verified | Embedded dashboard links and status |
-| `/monitoring-prometheus` | ✅ Verified | Prometheus targets and query endpoints |
-| `/monitoring-alerts` | ✅ Verified | Active alerts and rule evaluation |
-| `/storage-files` | ✅ Verified | File manager, navigation, actions |
-| `/storage-disks` | ✅ Verified | Dynamic block device discovery (`/sys/block`), SMART health, mount points |
-| `/storage-backups` | ✅ Verified | Backup schedule (Sunday 10:00 AM IST), manual trigger |
-| `/network-interfaces`| ✅ Verified | IP assignment, MAC address, link speed |
-| `/network-firewall` | ✅ Verified | UFW status, active rules, open ports |
-| `/network-diagnostics`| ✅ Verified | Ping, traceroute, DNS lookups |
-| `/power-management` | ✅ Verified | Instant power controls, schedule policies, electricity bills tab |
-| `/power-esp32` | ✅ Verified | Replaced alerts with toast notifications, fixed metric bursts, Outage Auto-Resume toggle |
-| `/notifications` | ✅ Verified | All 5 tabs verified, black square white 'M' monogram, Claude typography |
-| `/services-nextcloud`| ✅ Verified | Systemd nextcloud state + 3 Docker containers with lifecycle controls |
-| `/services-nginx` | ✅ Verified | Nginx state + 2 Docker containers (madesh-lab, npm) with lifecycle controls |
-| `/services-apps` | ✅ Verified | 22 container inventory. cAdvisor set to `restart: no` with one-click Start button |
-| `/logs-system` | ✅ Verified | Full Claude Obsidian theme, no fake window dots, journalctl stream with 6 unit filters |
-| `/logs-docker` | ✅ Verified | Full Claude Obsidian theme, live tail of 22 containers, tail line selectors, search |
-| `/logs-audit` | ✅ Verified | Full Claude Obsidian theme, security audit trail with colored tags for SSH, auth, sudo |
-| `/admin-users` | ✅ Verified | Firebase admin access control (Owner + Approved) + Ubuntu /etc/passwd accounts |
-| `/admin-updates` | ✅ Verified | Live APT cache status, category filters, upgrade triggers, reboot detection |
-| `/admin-settings` | ✅ Verified | All 5 tabs tested end-to-end. Corrected default target server MAC to `00:E0:22:DA:B1:67` |d | All 5 tabs tested. Corrected default target server MAC to `00:E0:22:DA:B1:67` |
-
----
-
-## ✅ COMPLETED HARDWARE DEPLOYMENT AT FATHER'S HOUSE
-
-- [x] **ESP32 Flashed & Verified**: Flashed `esp32_code.txt` on COM11 (`Silicon Labs CP210x`).
-- [x] **Wi-Fi & NTP Active**: Connected to `FTTH` router, NTP time synced to IST (`Asia/Kolkata` UTC+5:30).
-- [x] **Cloud Polling Operational**: Polling `https://wake.madesh.in/poll` every 8s.
-- [x] **End-to-End Remote Wake Verified**:
-  - Received remote wake trigger from Android app / Web Dashboard.
-  - ESP32 logged: `[GATEWAY] >>> WAKE REQUEST RECEIVED FROM REMOTE DASHBOARD / ANDROID APP! <<<`
-  - Broadcasted UDP magic packet burst to `00:E0:22:DA:B1:67`.
-  - MΛDESH Ubuntu Server physically booted up.
-  - `cloudflared` tunnel restored and API reported `"currentState": "online"`, `"intentional_off": false`.
-- [x] **Autonomous 08:00 AM IST Wake**: Armed on ESP32 hardware timer.
-- [x] **Autonomous 00:00 IST Midnight Shutdown**: Armed on server `powerEngine.js`.
-- [x] **Autonomous Power-Cut Auto-Resume (Zero-API Local Handshake)**:
-  - ESP32 powers on with extension box when electricity returns.
-  - Stabilizes for 25s countdown (allowing router Wi-Fi & power rails to settle).
-  - Checks if server is already online via `192.168.1.36:22` (SSH TCP handshake).
-  - Respects night sleep schedule (12:00 AM - 08:00 AM IST).
-  - Fires up to 3 WOL packets, polling for TCP ACK after each burst until confirmed online (`Boot confirmed in ~12 sec`).
-  - Fully local: 0% dependency on Cloudflare, internet, or remote APIs.
-- [x] **NVS Flash Memory Caching & Dashboard Sync**:
-  - Settings persisted in ESP32 internal non-volatile flash memory (`Preferences.h`).
-  - Automatically syncs from Web Dashboard `PowerManagement.tsx` (`Auto-Resume on Outage`) every 60s while server is online.
-  - Even during complete blackout when server is dead, ESP32 remembers whether auto-resume is Enabled or Disabled.
-- [x] **"Server Already Online" Redundancy Check Verified**:
-  - Arduino compile & flash stats: `1,060,368 bytes (80%)` program storage, `49,408 bytes (15%)` RAM on `ESP32 Dev Module (COM11)`.
-  - On boot with server already running, ESP32 logged:
-    `[Power Recovery] Server (192.168.1.36:22) is ALREADY online and acknowledging!`
-    `[Power Recovery] No wake packets required.`
-    `[Event Engine] Dispatched 'power_restored' -> HTTP 200`
-  - Confirmed: Zero redundant packet spam when online; API successfully receives power recovery event with HTTP 200.
-
----
-
-## System Topology & Architecture
+## 🎯 Executive Status & Handover Summary
 
 ```text
-MOTHER'S HOUSE (Remote Site)
-  ├── User Laptop (Web Dashboard: http://localhost:5173 or https://cloud.madesh.in)
-  └── User Android Phone (MΛDESH Server Control App)
-       │
-       ▼ HTTPS / Internet (Cloudflare Tunnel & Tailscale VPN)
-       │
-FATHER'S HOUSE (Physical Site)
-  ├── FTTH Wi-Fi Router (SSID: FTTH, Local Subnet: 192.168.1.x)
-  ├── ESP32 Controller (192.168.1.x, NVS Flash Caching, NTP IST UTC+5:30)
-  │    ├── Polls https://wake.madesh.in/poll every 8s
-  │    ├── Syncs settings from https://api.madesh.in/api/v1/power/config every 60s
-  │    ├── Autonomous 08:00 AM IST morning wake (UDP 255.255.255.255:9)
-  │    └── Autonomous power-cut auto-resume (25s countdown + 3 retries + TCP :22 ACK)
-  │
-  └── MΛDESH Ubuntu Server (192.168.1.36, MAC: 00:E0:22:DA:B1:67, Tailscale: 100.79.42.30)
-       ├── OS: Ubuntu Linux (kernel 7.0.0-34-generic), Intel Core i3-3220, 12 GB RAM
-       ├── Service: madesh-api.service (Node.js on 127.0.0.1:3001)
-       ├── Cloudflare Tunnel: api.madesh.in -> 127.0.0.1:3001
-       └── Power Engine: Nightly 00:00 IST shutdown (/usr/local/sbin/madesh-server-shutdown)
+========================================================================================
+                      MΛDESH SERVER INFRASTRUCTURE HANDOVER STATUS
+========================================================================================
+  Current Site Context: User is departing Father's House.
+  Firmware Status     : esp32_code.txt is 100% Production-Ready v1.0 & committed to Git.
+  Web Dashboard       : 100% Complete & Hosted on cloud.madesh.in (30/30 Tabs Verified).
+  Remote Ingress      : Cloudflare Tunnel (api.madesh.in) & Tailscale (100.79.42.30) Active.
+  Next Working Site   : Mother's House (Remote administration via Web & Android client).
+========================================================================================
 ```
 
 ---
 
-## Critical Credentials & Endpoints Quick Reference
+## 📋 Comprehensive Feature Matrix & Verification
 
-- **Server IP (LAN)**: `192.168.1.36`
-- **Server IP (Tailscale)**: `100.79.42.30`
-- **Server MAC Address**: `00:E0:22:DA:B1:67`
-- **Server Public API**: `https://api.madesh.in`
-- **Cloudflare Wake Gateway**: `https://wake.madesh.in/wake` (POST) & `https://wake.madesh.in/poll` (GET)
-- **ESP32 API Token**: `399d1a8c07f84460a525470ad5301bc6bfe4dee87763415281748efd7dae18f1`
-- **Wi-Fi SSID**: `FTTH` / Password: `shiva_00.2`
-- **Root Projects Directory**: `C:\Users\sivam\Documents\RDR2 Backup\SERVER_PROJECTS`
+| Capability | Controlled From | Backed By | Behavior & Safeguards | Status |
+|---|---|---|---|---|
+| **Scheduled Auto-ON** | Web Dashboard `/power-management` | ESP32 Firmware + NVS Flash | Fires WOL magic packets at configured 24h `startTime` (default 08:00 IST). Widened 30-min catch-up window. Skips wake if server is already online. Only fires once per calendar day (`lastWakeDay`). | 🟢 100% Production Ready |
+| **Scheduled Auto-OFF** | Web Dashboard `/power-management` | Node.js `powerEngine.js` | Evaluates every 30s. At configured 24h `shutdownTime` (default 00:00 / 12 AM IST), triggers `/usr/local/sbin/madesh-server-shutdown` and dispatches FCM push notification. | 🟢 100% Production Ready |
+| **Outage Auto-Resume** | Web Dashboard `/power-management` | ESP32 Zero-API Local Handshake | When power returns after a blackout, waits 25s for router/power to settle. Checks local TCP `192.168.1.36:22`. If server is down and policy is Enabled, wakes server (8 AM - 12 AM IST only). | 🟢 100% Production Ready |
+| **On-Demand Remote Wake** | Dashboard / Android App | Cloudflare Gateway + ESP32 Polling | POST to `https://wake.madesh.in/wake`. ESP32 polls `/poll` every 8s, receives trigger, broadcasts UDP WOL, and acknowledges gateway. | 🟢 100% Production Ready |
+| **Dual Clock Sync** | Hardware Layer | NTP UDP 123 + HTTPS 443 | Syncs with `pool.ntp.org` / `time.google.com` (IST +5:30). If UDP 123 is blocked by FTTH router, falls back to parsing `Date:` header from Google/Cloudflare over HTTPS 443. | 🟢 100% Production Ready |
+| **Flash Memory Caching** | ESP32 Hardware | internal NVS Flash (`Preferences.h`) | Syncs with `/api/v1/power/config` every 60s while server is online. Preserves `dailyWake`, `wakeHour`, `wakeMin`, `autoResume`, and `lastWakeDay` across blackouts. | 🟢 100% Production Ready |
+| **SSH Watchdog** | Web Dashboard `/admin-settings` | Linux Kernel Socket Stats (`ss`) | Accurately inspects Ubuntu 24.04 OpenSSH 9.6+ sessions using `ss -nt state established sport = :22` and process table checks. | 🟢 100% Production Ready |
+| **Thermal Telemetry** | Web Dashboard `/system-temperatures` | Linux Kernel `hwmon` & S.M.A.R.T. | Real kernel temperatures from `coretemp` and ATA S.M.A.R.T. (194/190). Zero fake fallbacks. Displays true hardware limits (88°C warn / 105°C trip). | 🟢 100% Production Ready |
+
+---
+
+## 🔄 End-to-End Operational Workflows
+
+### 1. Daily Lifecycle Flow
+```text
+  08:00 AM IST                                                     00:00 (12 AM IST)
+  ────────────                                                     ─────────────────
+  [ESP32 Clock]                                                    [powerEngine.js]
+        │                                                                  │
+        ▼                                                                  ▼
+  Fires WOL Packet ──────────────────────────────────────────► Graceful Linux Shutdown
+  (Server Boots)                                                   (Server Sleeps)
+        │                                                                  │
+        ▼                                                                  ▼
+  Clears intentional_off                                           Sets intentional_off
+  FCM: "Server Online"                                             FCM: "Nightly Shutdown"
+        │                                                                  │
+        └───────────────── 8 AM - 12 AM Operating Window ─────────────────┘
+```
+
+### 2. Blackout Recovery Flow
+```text
+  [Power Cuts Out] ───► Server & ESP32 Shut Down Together
+                              │
+  [Power Restores] ───► ESP32 Boots Instantly (< 2s)
+                              │
+                        25s Router & PSU Stabilization Delay
+                              │
+                        Checks Local Handshake: 192.168.1.36:22
+                              ├── If Online  ──► Suppresses WOL, sends HTTP 200 event
+                              └── If Offline ──► Reads NVS: If Enabled & 8AM-12AM: Wakes Server
+```
+
+---
+
+## ⚡ ESP32 Firmware Flashing Guide (Quick Reference)
+
+If flashing or re-flashing `esp32_code.txt`:
+1. **Open Arduino IDE**.
+2. **Select Board**: `ESP32 Dev Module`.
+3. **Select Port**: `COM11` (or active Silicon Labs CP210x COM port).
+4. **Copy Code**: Paste the complete code from [esp32_code.txt](file:///c:/Users/sivam/Documents/RDR2%20Backup/SERVER_PROJECTS/shiva-server/esp32_code.txt).
+5. **Upload Settings**:
+   - Flash Frequency: 80MHz
+   - Flash Mode: QIO
+   - Upload Speed: 921600 (or 115200 for stability)
+6. **Verify Serial Monitor** (115200 baud):
+   ```text
+   [WIFI] Connected! IP: 192.168.1.x
+   [NTP] Time synchronized successfully! Current IST Time: ...
+   [Preferences] Loaded NVS Config: autoResume=..., dailyWake=..., wakeTime=08:00
+   [Power Recovery] Checking if server needs auto-wake...
+   ```
+
+---
+
+## 🌐 Remote Operations from Mother's House
+
+When operating from Mother's house:
+1. **Web Dashboard**: Open `https://cloud.madesh.in` (or run local Vite frontend pointing to `https://api.madesh.in/api/v1`).
+2. **Android App**: Launch `MΛDESH Server Control` on Android phone.
+3. **Tailscale VPN**: Connect to `100.79.42.30` for direct terminal or Samba file access (`\\100.79.42.30\Seagate`).
+4. **Cloudflare Status**: Cloudflare tunnel handles all HTTPS traffic seamlessly to `127.0.0.1:3001`.
+
+---
+
+## 🔑 Critical Network & Credential Reference
+
+| Resource | Target | Access Detail |
+|---|---|---|
+| **Server LAN IP** | `192.168.1.36` | Father's house local subnet |
+| **Server MAC** | `00:E0:22:DA:B1:67` | Target for Wake-on-LAN packets |
+| **Server Tailscale** | `100.79.42.30` | Secure WireGuard mesh IP |
+| **Public API** | `https://api.madesh.in` | Cloudflare Ingress |
+| **Web Dashboard** | `https://cloud.madesh.in` | Hosted Vercel production deployment |
+| **Cloudflare Wake Poller** | `https://wake.madesh.in/poll` | Polled every 8s by ESP32 |
+| **ESP32 API Token** | `399d1a8c07f84460a525470ad5301bc6bfe4dee87763415281748efd7dae18f1` | Sent via `X-ESP32-Token` header |
+| **Cloudflare Wake Token** | `80e0140eb46046db8bd0e216bf7c938d3d6ef0a0896947158acc95c5a28f39c4` | Sent via `X-Wake-Token` header |
