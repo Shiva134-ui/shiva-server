@@ -48,6 +48,8 @@ const int   WOL_PORT          = 9;
 const bool  DEFAULT_AUTO_RESUME_ON_OUTAGE = false; // Default state is DISABLED (Safe)
 const int   OUTAGE_WINDOW_START_HOUR      = 8;    // 08:00 AM IST
 const int   OUTAGE_WINDOW_END_HOUR        = 24;   // 12:00 AM (Midnight) IST
+const int   MORNING_WAKE_HOUR             = 8;    // 08:00 AM IST
+const int   MORNING_WAKE_MAX_MINUTE       = 30;   // 08:00 AM to 08:30 AM IST wake window
 const int   OUTAGE_COUNTDOWN_SEC          = 25;   // Line voltage & router stabilization countdown
 const int   MAX_WOL_RETRIES               = 3;    // Maximum retry attempts
 const int   WOL_RETRY_INTERVAL_SEC        = 35;   // Wait up to 35 seconds per attempt for server to boot
@@ -73,7 +75,9 @@ const int   DAYLIGHT_OFFSET = 0;
 // =========================================================================================
 WiFiUDP udp;
 Preferences preferences;
-int lastWakeDay = -1;
+int lastWakeDay   = -1;
+int wakeHour      = MORNING_WAKE_HOUR;        // Loaded from NVS / synced from dashboard
+int wakeMinute    = 0;                         // Loaded from NVS / synced from dashboard
 unsigned long lastPollTime = 0;
 unsigned long lastSyncTime = 0;
 const unsigned long POLL_INTERVAL_MS = 8000; // Poll every 8 seconds
@@ -141,7 +145,11 @@ void reportServerEvent(const char* eventType, const char* message) {
 
     String payload = "{\"event\":\"" + String(eventType) + "\",\"message\":\"" + String(message) + "\"}";
     int code = https.POST(payload);
-    Serial.printf("[Event Engine] Dispatched '%s' -> HTTP %d\n", eventType, code);
+    if (code == 530 || code < 0) {
+      Serial.printf("[Event Engine] Dispatched '%s' -> HTTP %d (Cloudflare Tunnel offline - normal while server is off/booting)\n", eventType, code);
+    } else {
+      Serial.printf("[Event Engine] Dispatched '%s' -> HTTP %d\n", eventType, code);
+    }
     https.end();
   }
 }
@@ -216,15 +224,47 @@ void syncDashboardConfig() {
     int httpCode = https.GET();
     if (httpCode == 200) {
       String payload = https.getString();
-      bool autoResume = (payload.indexOf("\"autoResumeOnOutage\":true") >= 0);
+      bool autoResume      = (payload.indexOf("\"autoResumeOnOutage\":true") >= 0);
+      bool dailyWakeEnable = (payload.indexOf("\"dailyStartEnabled\":true") >= 0);
+
+      // Parse startTime (e.g. "08:00" or "09:30")
+      int newWakeHour = MORNING_WAKE_HOUR;
+      int newWakeMin  = 0;
+      int stIdx = payload.indexOf("\"startTime\":\"");
+      if (stIdx >= 0) {
+        String timeStr = payload.substring(stIdx + 13, stIdx + 18); // "HH:MM"
+        newWakeHour = timeStr.substring(0, 2).toInt();
+        newWakeMin  = timeStr.substring(3, 5).toInt();
+      }
 
       preferences.begin("madesh_pwr", false);
-      bool currentSaved = preferences.getBool("autoResume", DEFAULT_AUTO_RESUME_ON_OUTAGE);
-      if (currentSaved != autoResume) {
+
+      bool currentAutoResume = preferences.getBool("autoResume", DEFAULT_AUTO_RESUME_ON_OUTAGE);
+      if (currentAutoResume != autoResume) {
         preferences.putBool("autoResume", autoResume);
-        Serial.printf("\n[Dashboard Sync] >>> Auto-Resume on Outage setting updated in Flash: %s <<<\n\n",
+        Serial.printf("\n[Dashboard Sync] >>> Auto-Resume on Outage updated in Flash: %s <<<\n\n",
                       autoResume ? "ENABLED (8 AM - 12 AM)" : "DISABLED");
       }
+
+      bool currentDailyWake = preferences.getBool("dailyWake", true);
+      if (currentDailyWake != dailyWakeEnable) {
+        preferences.putBool("dailyWake", dailyWakeEnable);
+        Serial.printf("\n[Dashboard Sync] >>> Automatic 8 AM Wake updated in Flash: %s <<<\n\n",
+                      dailyWakeEnable ? "ENABLED" : "DISABLED");
+      }
+
+      int savedWakeHour = preferences.getInt("wakeHour", MORNING_WAKE_HOUR);
+      int savedWakeMin  = preferences.getInt("wakeMin", 0);
+      if (savedWakeHour != newWakeHour || savedWakeMin != newWakeMin) {
+        preferences.putInt("wakeHour", newWakeHour);
+        preferences.putInt("wakeMin", newWakeMin);
+        Serial.printf("\n[Dashboard Sync] >>> Wake time updated in Flash: %02d:%02d IST <<<\n\n",
+                      newWakeHour, newWakeMin);
+      }
+      // Update live globals so next morning check uses the new time immediately
+      wakeHour   = newWakeHour;
+      wakeMinute = newWakeMin;
+
       preferences.end();
     }
     https.end();
@@ -374,10 +414,40 @@ void setup() {
     // 1. Sync clock with IST time
     syncNTP();
 
-    // 2. Report power restoration / ESP32 boot event to Server API
-    reportServerEvent("esp32_boot", "ESP32 WOL relay has booted and reconnected to FTTH Wi-Fi.");
+    // 2. Read persistent settings from NVS Flash
+    preferences.begin("madesh_pwr", false);
+    lastWakeDay = preferences.getInt("lastWakeDay", -1);
+    wakeHour    = preferences.getInt("wakeHour",    MORNING_WAKE_HOUR);
+    wakeMinute  = preferences.getInt("wakeMin",     0);
+    preferences.end();
+    Serial.printf("[SCHEDULE] Restored from Flash: Wake at %02d:%02d IST, lastWakeDay=%d\n", wakeHour, wakeMinute, lastWakeDay);
 
-    // 3. Autonomous Power Restoration Recovery (Zero-API Local Handshake)
+    // If booting after configured wake window, mark today's wake as already handled to prevent false triggers
+    struct tm bootTime;
+    if (getLocalTime(&bootTime)) {
+      int windowEndMin = wakeMinute + MORNING_WAKE_MAX_MINUTE;
+      bool pastWindow = (bootTime.tm_hour > wakeHour) ||
+                        (bootTime.tm_hour == wakeHour && bootTime.tm_min > min(windowEndMin, 59)) ||
+                        (windowEndMin >= 60 && bootTime.tm_hour > wakeHour + 1) ||
+                        (windowEndMin >= 60 && bootTime.tm_hour == wakeHour + 1 && bootTime.tm_min >= (windowEndMin - 60));
+      if (pastWindow) {
+        if (lastWakeDay != bootTime.tm_mday) {
+          lastWakeDay = bootTime.tm_mday;
+          preferences.begin("madesh_pwr", false);
+          preferences.putInt("lastWakeDay", lastWakeDay);
+          preferences.end();
+          Serial.printf("[SCHEDULE] Boot time %02d:%02d IST is past wake window (%02d:%02d IST). Marked day %d as already handled.\n",
+                        bootTime.tm_hour, bootTime.tm_min, wakeHour, wakeMinute, lastWakeDay);
+        }
+      }
+    }
+
+    // 3. Report power restoration / ESP32 boot event to Server API (if server online)
+    if (isServerOnline()) {
+      reportServerEvent("esp32_boot", "ESP32 WOL relay has booted and reconnected to FTTH Wi-Fi.");
+    }
+
+    // 4. Autonomous Power Restoration Recovery (Zero-API Local Handshake)
     handlePowerRestorationRecovery();
   } else {
     Serial.println("\n[Wi-Fi Error] Failed to connect to Wi-Fi. Will auto-retry in loop.");
@@ -401,18 +471,38 @@ void loop() {
     return;
   }
 
-  // 2. Clock & Autonomous 08:00 AM Morning Wakeup
+  // 2. Clock & Autonomous Morning Wakeup (configurable time from dashboard, +30 min window)
   struct tm timeinfo;
   if (getLocalTime(&timeinfo)) {
-    // 08:00 AM IST widened wake window check
-    if (timeinfo.tm_hour >= 8 && timeinfo.tm_hour < OUTAGE_WINDOW_END_HOUR) {
+    // Morning wake window: from dashboard-set startTime to startTime+30 minutes
+    int wakeWindowEnd = wakeMinute + MORNING_WAKE_MAX_MINUTE; // allow 30 min catch-up window
+    bool inWakeHour = (timeinfo.tm_hour == wakeHour) ||
+                      (wakeWindowEnd >= 60 && timeinfo.tm_hour == wakeHour + 1 && timeinfo.tm_min < (wakeWindowEnd - 60));
+    bool inWakeMin  = (timeinfo.tm_hour == wakeHour && timeinfo.tm_min >= wakeMinute && timeinfo.tm_min <= min(wakeWindowEnd, 59)) ||
+                      (wakeWindowEnd >= 60 && timeinfo.tm_hour == wakeHour + 1 && timeinfo.tm_min < (wakeWindowEnd - 60));
+
+    if (inWakeHour && inWakeMin) {
       if (lastWakeDay != timeinfo.tm_mday) {
         lastWakeDay = timeinfo.tm_mday;
-        Serial.println("\n*************************************************************");
-        Serial.println("[SCHEDULE] 08:00 AM IST REACHED -> FIRING AUTONOMOUS WAKE!");
-        Serial.println("*************************************************************");
-        sendWOL("Scheduled 08:00 AM IST Auto-Wake");
-        reportServerEvent("wake_sent", "Automated 08:00 AM IST scheduled wake executed.");
+        preferences.begin("madesh_pwr", false);
+        preferences.putInt("lastWakeDay", lastWakeDay);
+        bool dailyWakeEnabled = preferences.getBool("dailyWake", true);
+        preferences.end();
+
+        if (!dailyWakeEnabled) {
+          Serial.printf("\n[SCHEDULE] %02d:%02d IST: Automatic Wake is DISABLED in dashboard. Skipping WOL.\n",
+                        wakeHour, wakeMinute);
+        } else if (isServerOnline()) {
+          Serial.println("\n*************************************************************");
+          Serial.printf("[SCHEDULE] %02d:%02d IST: Server is ALREADY online! Skipping WOL.\n", wakeHour, wakeMinute);
+          Serial.println("*************************************************************");
+        } else {
+          Serial.println("\n*************************************************************");
+          Serial.printf("[SCHEDULE] %02d:%02d IST REACHED -> FIRING AUTONOMOUS WAKE!\n", wakeHour, wakeMinute);
+          Serial.println("*************************************************************");
+          sendWOL("Scheduled Auto-Wake");
+          // Server will boot; powerEngine daemon dispatches the 'server_online' FCM notification.
+        }
       }
     }
   } else {

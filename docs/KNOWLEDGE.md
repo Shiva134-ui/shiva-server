@@ -54,8 +54,8 @@
   - Full keyboard navigation (`↑`/`↓`/`Enter`), obsidian dark theme (`#222222`), 27 routes indexed.
 - **FATHER'S HOUSE REMINDER (MANDATORY)**:
   - Whenever the user mentions being at Father's house or going to Father's house, REMIND THEM to update ESP32 firmware (`esp32_code.txt`):
-    1. **Widen morning wake trigger**: Change `timeinfo.tm_hour == 8 && timeinfo.tm_min == 0` to `timeinfo.tm_hour >= 8 && lastWakeDay != timeinfo.tm_mday` so it never misses the narrow 60s window.
-    2. **HTTP Time Fallback**: Fetch time from Cloudflare wake gateway response (`Date:` header over HTTPS 443) as fallback in case FTTH router blocks UDP NTP port 123.
+    1. **Morning wake trigger (08:00 - 08:30 AM IST)**: Use `timeinfo.tm_hour == 8 && timeinfo.tm_min <= 30` with `lastWakeDay` persisted in NVS Flash (`preferences`) and boot-time catch-up logic so it never misses the morning window while never firing on afternoon/evening reboots.
+    2. **HTTP Time Fallback**: Fetch time from Google/Cloudflare response (`Date:` header over HTTPS 443) as fallback in case FTTH router blocks UDP NTP port 123.
 - **Current Target for Tomorrow**:
   - 1. User walkthrough across all pages of the web dashboard to verify and catch any final minor issues.
   - 2. Deploy and host the application to `cloud.madesh.in`.
