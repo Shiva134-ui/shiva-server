@@ -109,12 +109,19 @@ Last updated: 2026-10-11 18:30 IST (Production-Ready v1.0 Firmware Finalized & A
 ### Milestone 8: Cloud Hosting, PWA & Production v1.0 Firmware (Complete)
 - [x] **Cloudflare & Vercel Deployment**: Dashboard hosted at `https://cloud.madesh.in`.
 - [x] **PWA & FCM Push Notifications**: Installable on Android & Desktop with active push alerts.
-- [x] **Production Firmware Finalized**: `esp32_code.txt` complete with:
+- [x] **Production Firmware Finalized & Flashed on Hardware**: `esp32_code.txt` complete with:
   1. Widened morning wake window: `timeinfo.tm_hour == wakeHour && timeinfo.tm_min <= wakeMin + 30`.
   2. Cloudflare HTTPS 443 `Date:` header fallback in case FTTH router blocks UDP NTP port 123 (with strictly corrected GMT offset parsing via `mktime`).
   3. Dynamic wake time synchronization with dashboard `startTime`.
   4. Redundant wake prevention with `lastWakeDay` in NVS Flash.
   5. HTTP 530 graceful fallback handling.
+- [x] **Physical Hardware Flashing & Live Boot Verification (2026-10-11 18:30 IST)**:
+  - Successfully flashed on COM11 at Father's house before departure.
+  - Live serial monitor confirmed:
+    - `[Power Recovery] Server (192.168.1.36:22) is ALREADY online and acknowledging!`
+    - `[Power Recovery] No wake packets required.`
+    - `[Event Engine] Dispatched 'power_restored' -> HTTP 200`
+    - `Autonomous 8:00 AM wake & polling active.`
 
 ---
 
